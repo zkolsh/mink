@@ -1,0 +1,29 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.38.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           mink
+version:        1
+build-type:     Simple
+
+executable mink
+  main-is: Main.hs
+  other-modules:
+      Client
+      Gopher
+      Paths_mink
+  hs-source-dirs:
+      src
+  ghc-options: -threaded
+  extra-libraries:
+      newt
+  build-depends:
+      base
+    , bytestring
+    , mtl
+    , network
+    , split
+    , transformers
+  default-language: Haskell2010

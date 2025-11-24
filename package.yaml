@@ -1,0 +1,19 @@
+name: mink
+version: 1
+
+dependencies:
+  - base
+  - network
+  - bytestring
+  - transformers
+  - mtl
+  - split
+
+executable:
+  main: Main.hs
+  source-dirs:
+    - src
+  ghc-options:
+    - -threaded
+  extra-libraries:
+    - newt
