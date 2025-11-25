@@ -57,7 +57,7 @@ instance Enum ElementType where
 
 elementType :: Char -> Maybe ElementType
 elementType x = case x of
-        '0' -> Just File
+        '0' -> Just PlainText
         '1' -> Just Directory
         '2' -> Just PhoneBook
         '3' -> Just Error

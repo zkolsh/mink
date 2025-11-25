@@ -145,19 +145,12 @@ ifHasAddress :: (HostName -> PortNumber -> IO ()) -> IO ()
 ifHasAddress action = runMaybeT requestConnection >>= \case
         Just (h, p') -> case readMaybe p' of
                 Just p -> action h p
-                Nothing -> do
-                    a <- newCString "Mink"
-                    b <- newCString "OK"
-                    c <- newCString "I couldn't understand the hostname or port."
-                    newtWinMessage a b c
-                    free a
-                    free b
-                    free c
-                    ifHasAddress action
+                Nothing -> winMessage "I couldn't understand the hostname or port."
+                        *> ifHasAddress action
         Nothing -> pure ()
 
-gopher :: HostName -> PortNumber -> String -> ExceptT String IO [Element]
-gopher hostname port selector = do
+getGopher :: HostName -> PortNumber -> String -> ExceptT String IO BSC.ByteString 
+getGopher hostname port selector = do
         sock <- liftIO $ socket AF_INET Stream defaultProtocol
         liftIO $ setSockOpt sock RecvTimeOut (SocketTimeout 2000000)
         let addrHints = defaultHints {
@@ -172,22 +165,19 @@ gopher hostname port selector = do
 
         liftIO $ connect sock addr
         liftIO $ sendAll sock (BSC.pack $! selector <> "\r\n")
-        reply <- liftIO (BSC.unpack <$> recvGopher sock)
+        reply <- liftIO $ recvGopher sock
         liftIO $ close sock
-        pure . mapMaybe parseLine . splitOn "\r\n" $ reply
+        pure reply
+
+gopher :: HostName -> PortNumber -> String -> ExceptT String IO [Element]
+gopher hostname port selector = mapMaybe parseLine . splitOn "\r\n" . BSC.unpack
+       <$> getGopher hostname port selector
 
 explore :: Element -> IO ()
 explore el = case elType el of
         Directory -> runExceptT (uncurry gopher (elHost el) (elRsrc el)) >>= \case
-                Left err -> do
-                        a <- newCString "Error"
-                        b <- newCString "OK"
-                        c <- newCString err
-                        newtWinMessage a b c
-                        free a
-                        free b
-                        free c
                 Right xs -> browse xs
+                Left err -> winMessage err
         _ -> endpoint el
 
 elementLine :: Element -> IO CString
@@ -239,99 +229,61 @@ browse es = do
 
         forM_ ps freeStablePtr
 
-getEndpoint :: Element -> ExceptT String IO BSC.ByteString
-getEndpoint el = do
-        sock <- liftIO $ socket AF_INET Stream defaultProtocol
-        liftIO $ setSockOpt sock RecvTimeOut (SocketTimeout 2000000)
-        let (hostname, port) = elHost el
-            selector = elRsrc el
-            addrHints = defaultHints {
-                addrFamily = AF_INET,
-                addrSocketType = Stream
-        }
-
-        as <- liftIO (map addrAddress <$>
-                getAddrInfo (Just addrHints) (Just hostname) (Just $ show port))
-        when (null as) $ throwError "Unable to resolve hostname."
-        let [addr] = take 1 as
-
-        liftIO $ connect sock addr
-        liftIO $ sendAll sock (BSC.pack $! selector <> "\r\n")
-        reply <- liftIO $ recvGopher sock
-        liftIO $ close sock
-        pure reply
-
 runEndpoint :: Element -> (BSC.ByteString -> IO ()) -> IO ()
-runEndpoint el action = runExceptT (getEndpoint el) >>= \case
+runEndpoint el action = runExceptT (uncurry getGopher (elHost el) (elRsrc el)) >>= \case
         Right xs -> action xs
-        Left err -> do
-                a <- newCString "Mink"
-                b <- newCString "Ok"
-                c <- newCString err
-                newtWinMessage a b c
-                free a
-                free b
-                free c
+        Left err -> winMessage err
 
 endpoint :: Element -> IO ()
 endpoint el = case elType el of
-        PlainText -> runEndpoint el $ \xs -> do
-                let xs' = filter (/= '\r') $ BSC.unpack xs
-                    height = fromIntegral . min 36 . max 12 . length $ lines xs'
-                    width = fromIntegral . min 110 . (+ 8) . maximum
-                        . map length $ lines xs'
+        PlainText -> runEndpoint el
+                $ longTextbox (elName el) . filter (/= '\r') . BSC.unpack
+        Directory -> winMessage "Haskell bug lmao"
+        x -> winMessage $ "Preview not available for " ++ show x ++ "."
 
-                csName <- newCString (elName el)
-                newtCenteredWindow width height csName
+winMessage :: String -> IO ()
+winMessage text = do
+        a <- newCString "Mink"
+        b <- newCString "Ok"
+        c <- newCString text
+        newtWinMessage a b c
+        free a
+        free b
+        free c
 
-                csBack <- newCString "Back"
-                csText <- newCString xs'
-                box <- newtTextbox 2 1 (width - 6) (height - 6)
-                        (NEWT_FLAG_SCROLL .|. NEWT_FLAG_WRAP)
-                newtTextboxSetText box csText
+longTextbox :: String -> String -> IO ()
+longTextbox name xs = do
+        let height = fromIntegral . min 36 . max 12 . length $ lines xs
+            width = fromIntegral . min 110 . (+ 8) . maximum
+                . map length $ lines xs
 
-                button <- newtButton (width `div` 2 - 4) (height - 4) csBack
-                form <- newtForm (NewtComponent nullPtr) nullPtr 0
-                newtFormAddComponent form box
-                newtFormAddComponent form button
+        csName <- newCString name
+        newtCenteredWindow width height csName
 
-                _ <- newtRunForm form
+        csBack <- newCString "Back"
+        csText <- newCString xs
+        box <- newtTextbox 2 1 (width - 6) (height - 6)
+                (NEWT_FLAG_SCROLL .|. NEWT_FLAG_WRAP)
+        newtTextboxSetText box csText
 
-                newtFormDestroy form
-                newtPopWindow
-                free csText
-                free csBack
-                free csName
+        button <- newtButton (width `div` 2 - 4) (height - 4) csBack
+        form <- newtForm (NewtComponent nullPtr) nullPtr 0
+        newtFormAddComponent form box
+        newtFormAddComponent form button
 
-        Directory -> do
-                a <- newCString "Mink"
-                b <- newCString "Ok"
-                c <- newCString "Haskell bug lmao"
-                newtWinMessage a b c
-                free a
-                free b
-                free c
+        _ <- newtRunForm form
 
-        x -> do
-                a <- newCString "Mink"
-                b <- newCString "Ok"
-                c <- newCString $! "Preview not available for " ++ show x ++ "."
-                newtWinMessage a b c
-                free a
-                free b
-                free c
+        newtFormDestroy form
+        newtPopWindow
+        free csText
+        free csBack
+        free csName
+        pure ()
 
 clientMain :: IO ()
 clientMain = setup *> program `finally` cleanup
         where setup = newtInit *> newtCls
               cleanup = newtFinished
               program = ifHasAddress $ \n p -> runExceptT (gopher n p "") >>= \case
-                Left err -> do
-                        a <- newCString "Error"
-                        b <- newCString "OK"
-                        c <- newCString err
-                        newtWinMessage a b c
-                        free a
-                        free b
-                        free c
+                Left err -> winMessage err
                 Right xs -> browse xs
