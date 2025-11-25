@@ -12,7 +12,7 @@
 {-# LANGUAGE StandaloneKindSignatures #-}
 module Client(clientMain) where
 
-import Gopher
+import GopherTypes
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
@@ -172,7 +172,7 @@ gopher hostname port selector = do
 
         liftIO $ connect sock addr
         liftIO $ sendAll sock (BSC.pack $! selector <> "\r\n")
-        reply <- liftIO (BSC.unpack <$> recvAll sock)
+        reply <- liftIO (BSC.unpack <$> recvGopher sock)
         liftIO $ close sock
         pure . mapMaybe parseLine . splitOn "\r\n" $ reply
 
@@ -193,7 +193,7 @@ explore el = case elType el of
 elementLine :: Element -> IO CString
 elementLine el = newCString $ icon (elType el) : ' ' : elName el
         where icon :: ElementType -> Char
-              icon File = 'F'
+              icon PlainText = 'F'
               icon Directory = 'D'
               icon PhoneBook = '#'
               icon Error = '!'
@@ -257,7 +257,7 @@ getEndpoint el = do
 
         liftIO $ connect sock addr
         liftIO $ sendAll sock (BSC.pack $! selector <> "\r\n")
-        reply <- liftIO $ recvAll sock
+        reply <- liftIO $ recvGopher sock
         liftIO $ close sock
         pure reply
 
@@ -275,7 +275,7 @@ runEndpoint el action = runExceptT (getEndpoint el) >>= \case
 
 endpoint :: Element -> IO ()
 endpoint el = case elType el of
-        File -> runEndpoint el $ \xs -> do
+        PlainText -> runEndpoint el $ \xs -> do
                 let xs' = filter (/= '\r') $ BSC.unpack xs
                     height = fromIntegral . min 36 . max 12 . length $ lines xs'
                     width = fromIntegral . min 110 . (+ 8) . maximum

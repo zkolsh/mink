@@ -12,7 +12,7 @@ executable mink
   main-is: Main.hs
   other-modules:
       Client
-      Gopher
+      GopherTypes
       Paths_mink
   hs-source-dirs:
       src

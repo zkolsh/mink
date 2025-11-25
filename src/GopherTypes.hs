@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Gopher(ElementType(..), Element(..), parseLine, recvAll) where
+module GopherTypes(ElementType(..), Element(..), parseLine, recvGopher) where
 
 import qualified Data.ByteString as BS
 import Data.Char
@@ -9,7 +9,7 @@ import Network.Socket
 import Network.Socket.ByteString
 import Text.Read (readMaybe)
 
-data ElementType = File
+data ElementType = PlainText
                  | Directory
                  | PhoneBook
                  | Error
@@ -26,7 +26,7 @@ data ElementType = File
                 deriving (Eq, Show)
 
 instance Enum ElementType where
-        fromEnum File = ord '0'
+        fromEnum PlainText = ord '0'
         fromEnum Directory = ord '1'
         fromEnum PhoneBook = ord '2'
         fromEnum Error = ord '3'
@@ -40,7 +40,7 @@ instance Enum ElementType where
         fromEnum Tn3270 = ord 'T'
         fromEnum Gif = ord 'g'
         fromEnum Image = ord 'I'
-        toEnum 48 = File
+        toEnum 48 = PlainText
         toEnum 49 = Directory
         toEnum 50 = PhoneBook
         toEnum 51 = Error
@@ -93,8 +93,8 @@ parseLine (t' : xs) = do
                 elHost = (domain, port)
         }
 
-recvAll :: Socket -> IO BS.ByteString
-recvAll sock = go BS.empty
+recvGopher :: Socket -> IO BS.ByteString
+recvGopher sock = go BS.empty
         where eot = "\r\n.\r\n"
               strip bytes = fromMaybe bytes (BS.stripSuffix eot bytes)
               go acc = do
