@@ -178,15 +178,25 @@ explore el = case elType el of
         Directory -> runExceptT (uncurry gopher (elHost el) (elRsrc el)) >>= \case
                 Right xs -> browse xs
                 Left err -> winMessage err
+        Information -> pure ()
         _ -> endpoint el
 
 elementLine :: Element -> IO CString
-elementLine el = newCString $ icon (elType el) : ' ' : elName el
+elementLine el = newCString $ icon (elType el) : ' ' : ' ' : elName el
         where icon :: ElementType -> Char
-              icon PlainText = 'F'
-              icon Directory = 'D'
-              icon PhoneBook = '#'
-              icon Error = '!'
+              icon PlainText = '\xEA7B'
+              icon Directory = '\xF413'
+              icon PhoneBook = '\xF095'
+              icon Error = '\xEA87'
+              icon Macintosh = '\xE711'
+              icon DOS = '\xE62A'
+              icon Unix = '\xF0EC0'
+              icon IndexSearch = '\xF0349'
+              icon Telnet = '\xEA85'
+              icon Binary = '\xEAE8'
+              icon Gif = '\xF02E9'
+              icon Image = '\xF02E9'
+              icon Information = ' '
               icon _ = '?'
 
 browse :: [Element] -> IO ()
@@ -195,8 +205,8 @@ browse es = do
         ps <- mapM newStablePtr es
         let es' = zip ns ps
             height = fromIntegral . min 36 . max 16 $ length es
-            width = fromIntegral . min 120 . max 46 . maximum 
-                $ map (length . elName) es
+            width = fromIntegral . min 132 . max 52 
+                $ foldr (max . (+14) . length . elName) 0 es
 
         csMink <- newCString "Mink"
         csBack <- newCString "Back"

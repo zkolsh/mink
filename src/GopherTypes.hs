@@ -23,6 +23,7 @@ data ElementType = PlainText
                  | Tn3270
                  | Gif
                  | Image
+                 | Information
                 deriving (Eq, Show)
 
 instance Enum ElementType where
@@ -40,6 +41,7 @@ instance Enum ElementType where
         fromEnum Tn3270 = ord 'T'
         fromEnum Gif = ord 'g'
         fromEnum Image = ord 'I'
+        fromEnum Information = ord 'i'
         toEnum 48 = PlainText
         toEnum 49 = Directory
         toEnum 50 = PhoneBook
@@ -54,6 +56,7 @@ instance Enum ElementType where
         toEnum 84 = Tn3270
         toEnum 103 = Gif
         toEnum 73 = Image
+        toEnum 105 = Information
 
 elementType :: Char -> Maybe ElementType
 elementType x = case x of
@@ -71,6 +74,7 @@ elementType x = case x of
         'T' -> Just Tn3270
         'g' -> Just Gif
         'I' -> Just Image
+        'i' -> Just Information
         _   -> Nothing
 
 data Element = Element {
