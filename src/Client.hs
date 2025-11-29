@@ -152,7 +152,7 @@ ifHasAddress action = runMaybeT requestConnection >>= \case
 getGopher :: HostName -> PortNumber -> String -> ExceptT String IO BSC.ByteString 
 getGopher hostname port selector = do
         sock <- liftIO $ socket AF_INET Stream defaultProtocol
-        liftIO $ setSockOpt sock RecvTimeOut (SocketTimeout 2000000)
+        liftIO $ setSockOpt sock RecvTimeOut (SocketTimeout 8000000)
         let addrHints = defaultHints {
                 addrFamily = AF_INET,
                 addrSocketType = Stream
@@ -239,6 +239,12 @@ endpoint el = case elType el of
         PlainText -> runEndpoint el
                 $ longTextbox (elName el) . filter (/= '\r') . BSC.unpack
         Directory -> winMessage "Haskell bug lmao"
+        IndexSearch -> Control.Monad.void . runMaybeT $ do
+                Just query <- liftIO $ readPrompt "Enter search query below:"
+                liftIO $ explore el {
+                        elRsrc = elRsrc el <> "\t" <> query,
+                        elType = Directory
+                }
         x -> winMessage $ "Preview not available for " ++ show x ++ "."
 
 winMessage :: String -> IO ()
@@ -278,7 +284,39 @@ longTextbox name xs = do
         free csText
         free csBack
         free csName
-        pure ()
+
+readPrompt :: String -> IO (Maybe String)
+readPrompt prompt = do
+        csPrompt <- newCString prompt
+        csMink <- newCString "Mink"
+        csOK <- newCString "OK"
+        csCancel <- newCString "Cancel"
+
+        newtCenteredWindow 50 8 csMink
+        
+        msg <- newtLabel 1 1 csPrompt
+        inputE <- newtEntry 1 2 nullPtr 48 nullPtr 0
+
+        ok <- newtButton 1 4 csOK
+        cancel <- newtButton 9 4 csCancel
+
+        form <- newtForm (NewtComponent nullPtr) nullPtr 0
+        newtFormAddComponent form msg
+        newtFormAddComponent form inputE
+        newtFormAddComponent form ok
+        newtFormAddComponent form cancel
+
+        result <- newtRunForm form
+        input <- peekCString =<< newtEntryGetValue inputE
+        newtFormDestroy form
+        newtPopWindow
+
+        free csMink
+        free csOK
+        free csCancel
+        free csPrompt
+
+        pure $! if result == cancel then Nothing else Just input
 
 clientMain :: IO ()
 clientMain = setup *> program `finally` cleanup
