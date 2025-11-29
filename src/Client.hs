@@ -6,7 +6,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RoleAnnotations #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneKindSignatures #-}
@@ -14,17 +13,15 @@ module Client(clientMain) where
 
 import GopherTypes
 
-import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as BSC
 import Control.Exception (finally)
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Class
-import Control.Monad.Trans.Except
+import Control.Monad.Trans.Except ()
 import Control.Monad.Trans.Maybe
 import Data.Bits
 import Data.Data
-import Data.Functor ((<&>))
 import Data.Kind (Type)
 import Data.List.Split (splitOn)
 import Data.Maybe (mapMaybe)
@@ -32,12 +29,11 @@ import Foreign
 import Foreign.C
 import Network.Socket
 import Network.Socket.ByteString
-import System.IO.Unsafe (unsafePerformIO)
 import Text.Read (readMaybe)
 
 type ConstPtr :: Type -> Type
 type role ConstPtr phantom
-newtype ConstPtr a = ConstPtr { unConstPtr :: Ptr a }
+newtype ConstPtr a = ConstPtr { _unConstPtr :: Ptr a }
         deriving stock (Data)
         deriving newtype (Eq, Ord, Storable)
 
@@ -60,28 +56,6 @@ newtype NewtComponent = NewtComponent (Ptr NewtComponentStruct) deriving Eq
 #define NEWT_FLAG_CHECKBOX      (1 `shiftL` 10)
 #define NEWT_FLAG_PASSWORD      (1 `shiftL` 11)
 #define NEWT_FLAG_SHOWCURSOR    (1 `shiftL` 12)
-
-#define NEWT_ANCHOR_LEFT        (1 `shiftL` 0)
-#define NEWT_ANCHOR_RIGHT       (1 `shiftL` 1)
-#define NEWT_ANCHOR_TOP         (1 `shiftL` 2)
-#define NEWT_ANCHOR_BOTTOM      (1 `shiftL` 3)
-
-#define NEWT_GRID_FLAG_GROWX    (1 `shiftL` 0)
-#define NEWT_GRID_FLAG_GROWY    (1 `shiftL` 1)
-
-data NewtGridStruct
-newtype NewtGrid = NewtGrid (Ptr NewtGridStruct)
-
-newtype NewtGridElement = NewtGridElement CInt deriving (Eq, Ord, Show, Storable, Bits)
-
-pattern NEWT_GRID_EMPTY :: NewtGridElement
-pattern NEWT_GRID_EMPTY = NewtGridElement 0
-
-pattern NEWT_GRID_COMPONENT :: NewtGridElement
-pattern NEWT_GRID_COMPONENT = NewtGridElement 1
-
-pattern NEWT_GRID_SUBGRID :: NewtGridElement
-pattern NEWT_GRID_SUBGRID = NewtGridElement 2
 
 foreign import capi "newt.h newtInit" newtInit :: IO ()
 foreign import capi "newt.h newtFinished" newtFinished :: IO ()
@@ -160,8 +134,10 @@ getGopher hostname port selector = do
 
         as <- liftIO (map addrAddress <$>
                 getAddrInfo (Just addrHints) (Just hostname) (Just $ show port))
-        when (null as) $ throwError "Unable to resolve hostname."
-        let [addr] = take 1 as
+
+        addr <- case as of
+            [] -> throwError "Unable to resolve hostname."
+            (x : _) -> pure x
 
         liftIO $ connect sock addr
         liftIO $ sendAll sock (BSC.pack $! selector <> "\r\n")

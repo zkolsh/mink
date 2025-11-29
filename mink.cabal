@@ -16,7 +16,7 @@ executable mink
       Paths_mink
   hs-source-dirs:
       src
-  ghc-options: -threaded
+  ghc-options: -threaded -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   extra-libraries:
       newt
   build-depends:

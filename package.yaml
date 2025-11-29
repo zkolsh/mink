@@ -15,5 +15,14 @@ executable:
     - src
   ghc-options:
     - -threaded
+    - -Wall
+    - -Wcompat
+    - -Widentities
+    - -Wincomplete-record-updates
+    - -Wincomplete-uni-patterns
+    - -Wmissing-export-lists
+    - -Wmissing-home-modules
+    - -Wpartial-fields
+    - -Wredundant-constraints
   extra-libraries:
     - newt

@@ -57,6 +57,7 @@ instance Enum ElementType where
         toEnum 103 = Gif
         toEnum 73 = Image
         toEnum 105 = Information
+        toEnum _ = undefined
 
 elementType :: Char -> Maybe ElementType
 elementType x = case x of
