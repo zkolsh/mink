@@ -22,8 +22,10 @@ executable mink
   build-depends:
       base
     , bytestring
+    , filepath
     , mtl
     , network
     , split
     , transformers
+    , unix
   default-language: Haskell2010

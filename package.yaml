@@ -3,11 +3,13 @@ version: 1
 
 dependencies:
   - base
-  - network
   - bytestring
-  - transformers
   - mtl
+  - network
   - split
+  - transformers
+  - filepath
+  - unix
 
 executable:
   main: Main.hs

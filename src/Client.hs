@@ -14,7 +14,7 @@ module Client(clientMain) where
 import GopherTypes
 
 import qualified Data.ByteString.Char8 as BSC
-import Control.Exception (finally)
+import Control.Exception (finally, try)
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.IO.Class
@@ -23,12 +23,17 @@ import Control.Monad.Trans.Maybe
 import Data.Bits
 import Data.Data
 import Data.Kind (Type)
+import Data.List (sort)
 import Data.List.Split (splitOn)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (mapMaybe, fromMaybe, listToMaybe)
 import Foreign
 import Foreign.C
 import Network.Socket
 import Network.Socket.ByteString
+import System.FilePath
+import System.Posix.Directory
+import System.Posix.Files
+import System.Posix.User (getEffectiveUserID, getUserEntryForID, homeDirectory)
 import Text.Read (readMaybe)
 
 type ConstPtr :: Type -> Type
@@ -231,7 +236,21 @@ endpoint el = case elType el of
                         elRsrc = elRsrc el <> "\t" <> query,
                         elType = Directory
                 }
+        Macintosh -> saveFileEndpoint el
+        DOS -> saveFileEndpoint el
+        Unix -> saveFileEndpoint el
+        Binary -> saveFileEndpoint el
+        Image -> saveFileEndpoint el
+        Gif -> saveFileEndpoint el
         x -> winMessage $ "Preview not available for " ++ show x ++ "."
+
+saveFileEndpoint :: Element -> IO ()
+saveFileEndpoint el = do
+        you <- getEffectiveUserID >>= getUserEntryForID
+        let home = homeDirectory you
+        let paths = [home </> "Downloads", home </> "Documents", home, "/"]
+        path <- fromMaybe "/" . listToMaybe <$> filterM fileExist paths
+        runEndpoint el $ saveFilePrompt path (elName el)
 
 winMessage :: String -> IO ()
 winMessage text = do
@@ -303,6 +322,81 @@ readPrompt prompt = do
         free csPrompt
 
         pure $! if result == cancel then Nothing else Just input
+
+getFileString :: FilePath -> FilePath -> IO CString
+getFileString dir fp = do
+    s' :: Either IOError FileStatus <- try $ getFileStatus (dir </> fp)
+    let icon = case s' of
+            (Left _) -> ' '
+            (Right s) -> if isDirectory s then '\xF413' else '\xEA7B'
+
+    newCString $ icon : "  " <> fp
+
+fromDirStream :: DirStream -> IO [FilePath]
+fromDirStream ds = readDirStreamMaybe ds >>= \case
+        Nothing -> pure []
+        Just e -> (e : ) <$> fromDirStream ds
+
+saveFilePrompt :: FilePath -> FilePath -> BSC.ByteString -> IO ()
+saveFilePrompt dir name contents = do
+        csTitle <- newCString "Save file to disk"
+        csOK <- newCString "OK"
+        csCancel <- newCString "Cancel"
+        csName <- newCString name
+
+        files <- do
+                ds <- openDirStream dir
+                ns <- fromDirStream ds
+                closeDirStream ds
+                pure $ sort ns
+
+        ns <- mapM (getFileString dir) files
+        ps <- mapM newStablePtr files
+        let es' = zip ns ps
+            height = fromIntegral . min 36 . max 16 $ length files
+            width = fromIntegral . min 132 . max 50 
+                $ foldr (max . (+14) . length) 0 files
+
+        newtCenteredWindow width height csTitle
+        list <- newtListbox 2 1 (height - 9) 
+                (NEWT_FLAG_SCROLL .|. NEWT_FLAG_BORDER .|. NEWT_FLAG_RETURNEXIT)
+
+        newtListboxSetWidth list (width - 4) 
+        forM_ es' $ \(n, p) -> newtListboxAddEntry list n (castStablePtrToPtr p)
+
+        inputE <- newtEntry 2 (height - 7) csName (width - 4) nullPtr 0
+
+        ok <- newtButton 2 (height - 4) csOK
+        cancel <- newtButton 10 (height - 4) csCancel
+
+        form <- newtForm (NewtComponent nullPtr) nullPtr 0
+        newtFormAddComponent form list
+        newtFormAddComponent form inputE
+        newtFormAddComponent form ok
+        newtFormAddComponent form cancel
+
+        result <- newtRunForm form
+        input <- peekCString =<< newtEntryGetValue inputE
+
+        free csTitle
+        free csOK
+        free csCancel
+        free csName
+        newtPopWindow
+
+        when (result == list) $ do
+                item' <- newtListboxGetCurrent list
+                let path' :: StablePtr FilePath
+                    path' = castPtrToStablePtr item'
+                path <- (dir </>) <$> deRefStablePtr path'
+                saveFilePrompt path name contents
+
+        when (result == ok) $ do
+                BSC.writeFile (dir </> input) contents
+
+        newtFormDestroy form
+        forM_ ns free
+        forM_ ps freeStablePtr
 
 clientMain :: IO ()
 clientMain = setup *> program `finally` cleanup
